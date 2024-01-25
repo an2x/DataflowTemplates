@@ -53,11 +53,11 @@ import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Integration test for {@link PubSubToBigQuery} Flex template. */
+/** Integration test for {@link PubSubToBigQueryXlang} Flex template. */
 @Category(TemplateIntegrationTest.class)
-@TemplateIntegrationTest(PubSubToBigQuery.class)
+@TemplateIntegrationTest(PubSubToBigQueryXlang.class)
 @RunWith(JUnit4.class)
-public class PubSubToBigQueryIT extends TemplateTestBase {
+public class PubSubToBigQueryXlangIT extends TemplateTestBase {
 
   private PubsubResourceManager pubsubResourceManager;
   private BigQueryResourceManager bigQueryResourceManager;

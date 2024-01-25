@@ -32,7 +32,6 @@ import com.google.cloud.teleport.v2.proto.testing.Address;
 import com.google.cloud.teleport.v2.proto.testing.Tier;
 import com.google.cloud.teleport.v2.proto.testing.User;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.io.Resources;
 import com.google.protobuf.ByteString;
 import com.google.pubsub.v1.SubscriptionName;
 import com.google.pubsub.v1.TopicName;
@@ -65,7 +64,7 @@ import org.junit.runners.JUnit4;
 @Category(TemplateIntegrationTest.class)
 @TemplateIntegrationTest(PubsubProtoToBigQuery.class)
 @RunWith(JUnit4.class)
-public final class PubsubProtoToBigQueryIT extends TemplateTestBase {
+public final class PubsubProtoToBigQueryWithPythonUdfIT extends TemplateTestBase {
 
   private static final String TEST_DIR_PREFIX = "PubSubProtoToBigQueryIT/";
   private static final String PROTO_DIR_PREFIX = "generated-test-sources/protobuf/schema/";
@@ -90,21 +89,12 @@ public final class PubsubProtoToBigQueryIT extends TemplateTestBase {
     gcsClient.uploadArtifact(PROTO_SCHEMA, Paths.get("target", PROTO_DIR_PREFIX + PROTO_SCHEMA));
 
     gcsClient.createArtifact(
-        "udf.js",
-        "function uppercaseName(value) {\n"
-            + "  const data = JSON.parse(value);\n"
-            + "  if (data.name == \"INVALID\") {\n"
-            + "    throw 'Invalid name!';\n"
-            + "  }\n"
-            + "  data.name = data.name.toUpperCase();\n"
-            + "  return JSON.stringify(data);\n"
-            + "}");
-
-    gcsClient.createArtifact(
         "pyudf.py",
         "import json\n"
             + "def uppercaseName(value):\n"
             + "  data = json.loads(value)\n"
+            + "  if data.name == \"INVALID\":\n"
+            + "    raise Exception(\"Invalid name!\")\n"
             + "  data.name = data.name.upper()\n"
             + "  return json.dumps(data)");
   }
@@ -116,34 +106,11 @@ public final class PubsubProtoToBigQueryIT extends TemplateTestBase {
 
   @Test
   @Category(DirectRunnerTest.class)
-  public void pubSubProtoToBigQueryInferredSchema() throws IOException {
-    basePubSubProtoToBigQuery(Function.identity(), false);
+  public void pubSubProtoToBigQueryWithPythonUdf() throws IOException {
+    basePubSubProtoToBigQueryWithPythonUdf(Function.identity(), false);
   }
 
-  @Test
-  @Category(DirectRunnerTest.class)
-  public void pubSubProtoToBigQueryPreserveProtoNames() throws IOException {
-    gcsClient.uploadArtifact(
-        BIGQUERY_PRESERVED_SCHEMA,
-        Resources.getResource(TEST_DIR_PREFIX + BIGQUERY_PRESERVED_SCHEMA).getPath());
-
-    basePubSubProtoToBigQuery(
-        b ->
-            b.addParameter("preserveProtoFieldNames", "true")
-                .addParameter("bigQueryTableSchemaPath", getGcsPath(BIGQUERY_PRESERVED_SCHEMA)),
-        true);
-  }
-
-  @Test
-  public void pubSubProtoToBigQueryUdfCustomOutputTopic() throws IOException {
-    gcsClient.uploadArtifact(
-        BIGQUERY_SCHEMA, Resources.getResource(TEST_DIR_PREFIX + BIGQUERY_SCHEMA).getPath());
-
-    basePubSubProtoToBigQuery(
-        b -> b.addParameter("bigQueryTableSchemaPath", getGcsPath(BIGQUERY_SCHEMA)), false);
-  }
-
-  private void basePubSubProtoToBigQuery(
+  private void basePubSubProtoToBigQueryWithPythonUdf(
       Function<LaunchConfig.Builder, LaunchConfig.Builder> paramsAdder, boolean preserved)
       throws IOException {
 
@@ -174,8 +141,8 @@ public final class PubsubProtoToBigQueryIT extends TemplateTestBase {
                     .addParameter("inputSubscription", inputSubscription.toString())
                     .addParameter("outputTopic", badProtoOutputTopic.toString())
                     .addParameter("udfOutputTopic", badUdfOutputTopic.toString())
-                    .addParameter("javascriptTextTransformGcsPath", getGcsPath("udf.js"))
-                    .addParameter("javascriptTextTransformFunctionName", "uppercaseName")
+                    .addParameter("pythonUdfGcsPath", getGcsPath("pyudf.py"))
+                    .addParameter("pythonUdfFunctionName", "uppercaseName")
                     .addParameter("outputTableSpec", toTableSpecLegacy(table))));
     assertThatPipeline(info).isRunning();
 

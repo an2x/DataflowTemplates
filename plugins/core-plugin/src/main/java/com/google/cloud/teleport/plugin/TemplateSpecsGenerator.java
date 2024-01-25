@@ -138,7 +138,7 @@ public class TemplateSpecsGenerator {
                 + "\",\n"
                 + "  \"classPath\": \"/template/"
                 + containerName
-                + "/libs/conscrypt-openjdk-uber-*.jar:/template/"
+                + "/libs/conscrypt-openjdk-uber.jar:/template/"
                 + containerName
                 + "/libs/*:/template/"
                 + containerName
