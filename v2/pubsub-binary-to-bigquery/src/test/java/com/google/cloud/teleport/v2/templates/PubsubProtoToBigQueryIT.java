@@ -101,13 +101,12 @@ public final class PubsubProtoToBigQueryIT extends TemplateTestBase {
             + "}");
 
     gcsClient.createArtifact(
-            "pyudf.py",
-            "import json\n"
+        "pyudf.py",
+        "import json\n"
             + "def uppercaseName(value):\n"
             + "  data = json.loads(value)\n"
             + "  data.name = data.name.upper()\n"
-            + "  return json.dumps(data)"
-    );
+            + "  return json.dumps(data)");
   }
 
   @After

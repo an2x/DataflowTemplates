@@ -29,6 +29,8 @@ import com.google.cloud.teleport.v2.transforms.BigQueryConverters.FailsafeJsonTo
 import com.google.cloud.teleport.v2.transforms.ErrorConverters;
 import com.google.cloud.teleport.v2.transforms.JavascriptTextTransformer.FailsafeJavascriptUdf;
 import com.google.cloud.teleport.v2.transforms.PythonExternalTextTransformer;
+import com.google.cloud.teleport.v2.transforms.PythonExternalTextTransformer.FailsafePythonExternalUdf;
+import com.google.cloud.teleport.v2.transforms.PythonExternalTextTransformer.FailsafeRowPythonExternalUdf;
 import com.google.cloud.teleport.v2.utils.BigQueryIOUtils;
 import com.google.cloud.teleport.v2.utils.ResourceUtils;
 import com.google.cloud.teleport.v2.values.FailsafeElement;
@@ -69,9 +71,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The {@link PubSubToBigQuery} pipeline is a streaming pipeline which ingests data in JSON format
- * from Cloud Pub/Sub, executes a UDF, and outputs the resulting records to BigQuery. Any errors
- * which occur in the transformation of the data or execution of the UDF will be output to a
+ * The {@link PubSubToBigQueryXlang} pipeline is a streaming pipeline which ingests data in JSON
+ * format from Cloud Pub/Sub, executes a UDF, and outputs the resulting records to BigQuery. Any
+ * errors which occur in the transformation of the data or execution of the UDF will be output to a
  * separate errors table in BigQuery. The errors table will be created if it does not exist prior to
  * execution. Both output and error tables are specified by the user as template parameters.
  *
@@ -87,15 +89,15 @@ import org.slf4j.LoggerFactory;
  * for instructions on how to use or modify this template.
  */
 @Template(
-    name = "PubSub_to_BigQuery_Flex",
+    name = "PubSub_To_BigQuery_Xlang",
     category = TemplateCategory.STREAMING,
-    displayName = "Pub/Sub to BigQuery",
+    displayName = "Pub/Sub to BigQuery Xlang",
     description =
-        "The Pub/Sub to BigQuery template is a streaming pipeline that reads JSON-formatted messages from a Pub/Sub topic or subscription, and writes them to a BigQuery table. "
+        "The Pub/Sub to BigQuery Xlang template is a streaming pipeline that reads JSON-formatted messages from a Pub/Sub topic or subscription, and writes them to a BigQuery table. "
             + "You can use the template as a quick solution to move Pub/Sub data to BigQuery. "
             + "The template reads JSON-formatted messages from Pub/Sub and converts them to BigQuery elements.",
     optionsClass = Options.class,
-    flexContainerName = "pubsub-to-bigquery",
+    flexContainerName = "pubsub-to-bigquery-xlang",
     documentation =
         "https://cloud.google.com/dataflow/docs/guides/templates/provided/pubsub-to-bigquery",
     contactInformation = "https://cloud.google.com/support",
@@ -106,10 +108,10 @@ import org.slf4j.LoggerFactory;
     streaming = true,
     supportsAtLeastOnce = true,
     supportsExactlyOnce = true)
-public class PubSubToBigQuery {
+public class PubSubToBigQueryXlang {
 
   /** The log to output status messages to. */
-  private static final Logger LOG = LoggerFactory.getLogger(PubSubToBigQuery.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PubSubToBigQueryXlang.class);
 
   /** The tag for the main output for the UDF. */
   public static final TupleTag<FailsafeElement<PubsubMessage, String>> UDF_OUT =
@@ -193,7 +195,7 @@ public class PubSubToBigQuery {
   /**
    * The main entry-point for pipeline execution. This method will start the pipeline but will not
    * wait for it's execution to finish. If blocking execution is required, use the {@link
-   * PubSubToBigQuery#run(Options)} method to start the pipeline and invoke {@code
+   * PubSubToBigQueryXlang#run(Options)} method to start the pipeline and invoke {@code
    * result.waitUntilFinish()} on the {@link PipelineResult}.
    *
    * @param args The command-line args passed by the executor.
@@ -342,14 +344,14 @@ public class PubSubToBigQuery {
    * <p>The {@link PCollectionTuple} output will contain the following {@link PCollection}:
    *
    * <ul>
-   *   <li>{@link PubSubToBigQuery#UDF_OUT} - Contains all {@link FailsafeElement} records
+   *   <li>{@link PubSubToBigQueryXlang#UDF_OUT} - Contains all {@link FailsafeElement} records
    *       successfully processed by the optional UDF.
-   *   <li>{@link PubSubToBigQuery#UDF_DEADLETTER_OUT} - Contains all {@link FailsafeElement}
+   *   <li>{@link PubSubToBigQueryXlang#UDF_DEADLETTER_OUT} - Contains all {@link FailsafeElement}
    *       records which failed processing during the UDF execution.
-   *   <li>{@link PubSubToBigQuery#TRANSFORM_OUT} - Contains all records successfully converted from
-   *       JSON to {@link TableRow} objects.
-   *   <li>{@link PubSubToBigQuery#TRANSFORM_DEADLETTER_OUT} - Contains all {@link FailsafeElement}
-   *       records which couldn't be converted to table rows.
+   *   <li>{@link PubSubToBigQueryXlang#TRANSFORM_OUT} - Contains all records successfully converted
+   *       from JSON to {@link TableRow} objects.
+   *   <li>{@link PubSubToBigQueryXlang#TRANSFORM_DEADLETTER_OUT} - Contains all {@link
+   *       FailsafeElement} records which couldn't be converted to table rows.
    * </ul>
    */
   static class PubsubMessageToTableRow
@@ -379,29 +381,19 @@ public class PubSubToBigQuery {
                 // udfOut = input
                 // Map the incoming messages into FailsafeElements so we can recover from failures
                 // across multiple transforms.
-                .apply(
-                    "MapToRecord",
-                    PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.getMappingFunction(
-                        "pubsub"))
-                .setRowSchema(PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA)
-                .setCoder(
-                    RowCoder.of(
-                        PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA))
+                .apply("MapToRecord", FailsafeRowPythonExternalUdf.getMappingFunction("pubsub"))
+                .setRowSchema(FailsafeRowPythonExternalUdf.ROW_SCHEMA)
+                .setCoder(RowCoder.of(FailsafeRowPythonExternalUdf.ROW_SCHEMA))
                 .apply(
                     "InvokeUDF",
-                    PythonExternalTextTransformer.FailsafePythonExternalUdf
-                        .<PubsubMessage>newBuilder()
+                    FailsafePythonExternalUdf.<PubsubMessage>newBuilder()
                         .setFileSystemPath(options.getPythonExternalTextTransformGcsPath())
                         .setFunctionName(options.getPythonExternalTextTransformFunctionName())
                         .setSuccessTag(UDF_OUT)
                         .setFailureTag(UDF_DEADLETTER_OUT)
                         .build())
-                .setRowSchema(
-                    PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.FAILSAFE_SCHEMA)
-                .setCoder(
-                    RowCoder.of(
-                        PythonExternalTextTransformer.FailsafeRowPythonExternalUdf
-                            .FAILSAFE_SCHEMA));
+                .setRowSchema(FailsafeRowPythonExternalUdf.FAILSAFE_SCHEMA)
+                .setCoder(RowCoder.of(FailsafeRowPythonExternalUdf.FAILSAFE_SCHEMA));
         // .apply("MapRowsToFailsafeElements", ParDo.of(new
         // TableRowToFailsafeElementFn()).withOutputTags(UDF_OUT,
         // TupleTagList.of(UDF_DEADLETTER_OUT)));

@@ -257,5 +257,11 @@
       <groupId>org.apache.beam</groupId>
       <artifactId>beam-sdks-java-extensions-python</artifactId>
     </dependency>
+    <dependency>
+      <groupId>org.apache.beam</groupId>
+      <artifactId>beam-runners-direct-java</artifactId>
+      <version>2.53.0</version>
+      <scope>runtime</scope>
+    </dependency>
   </dependencies>
 </project>
