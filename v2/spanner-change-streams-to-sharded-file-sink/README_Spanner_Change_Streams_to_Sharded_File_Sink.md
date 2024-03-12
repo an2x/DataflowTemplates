@@ -36,7 +36,10 @@ on [Metadata Annotations](https://github.com/GoogleCloudPlatform/DataflowTemplat
 * **filtrationMode** (Filtration mode): Mode of Filtration, decides how to drop certain records based on a criteria. Currently supported modes are: none (filter nothing), forward_migration (filter records written via the forward migration pipeline). Defaults to forward_migration.
 * **metadataTableSuffix** (Metadata table suffix): Suffix appended to the spanner_to_gcs_metadata and shard_file_create_progress metadata tables.Useful when doing multiple runs.Only alpha numeric and underscores are allowed. Defaults to empty.
 * **skipDirectoryName** (Directory name for holding skipped records): Records skipped from reverse replication are written to this directory. Default directory name is skip.
-* **runMode** (This is the type of run mode. Supported values - regular/resume.): Regular starts from input start time,resume start from last processed time. Defaults to: regular.
+* **runMode** (This is the type of run mode. Supported values are regular and resume. Default is regular.): Regular starts from input start time, resume start from last processed time. Defaults to: regular.
+* **shardingCustomJarPath** (Custom jar location in Cloud Storage): Custom jar location in Cloud Storage that contains the customization logic for fetching shard id. Defaults to empty.
+* **shardingCustomClassName** (Custom class name): Fully qualified class name having the custom shard id implementation.  It is a mandatory field in case shardingCustomJarPath is specified. Defaults to empty.
+* **shardingCustomParameters** (Custom sharding logic parameters): String containing any custom parameters to be passed to the custom sharding class. Defaults to empty.
 
 
 
@@ -134,6 +137,9 @@ export FILTRATION_MODE=forward_migration
 export METADATA_TABLE_SUFFIX=""
 export SKIP_DIRECTORY_NAME=skip
 export RUN_MODE=regular
+export SHARDING_CUSTOM_JAR_PATH=""
+export SHARDING_CUSTOM_CLASS_NAME=""
+export SHARDING_CUSTOM_PARAMETERS=""
 
 gcloud dataflow flex-template run "spanner-change-streams-to-sharded-file-sink-job" \
   --project "$PROJECT" \
@@ -155,7 +161,10 @@ gcloud dataflow flex-template run "spanner-change-streams-to-sharded-file-sink-j
   --parameters "metadataTableSuffix=$METADATA_TABLE_SUFFIX" \
   --parameters "skipDirectoryName=$SKIP_DIRECTORY_NAME" \
   --parameters "runIdentifier=$RUN_IDENTIFIER" \
-  --parameters "runMode=$RUN_MODE"
+  --parameters "runMode=$RUN_MODE" \
+  --parameters "shardingCustomJarPath=$SHARDING_CUSTOM_JAR_PATH" \
+  --parameters "shardingCustomClassName=$SHARDING_CUSTOM_CLASS_NAME" \
+  --parameters "shardingCustomParameters=$SHARDING_CUSTOM_PARAMETERS"
 ```
 
 For more information about the command, please check:
@@ -193,6 +202,9 @@ export FILTRATION_MODE=forward_migration
 export METADATA_TABLE_SUFFIX=""
 export SKIP_DIRECTORY_NAME=skip
 export RUN_MODE=regular
+export SHARDING_CUSTOM_JAR_PATH=""
+export SHARDING_CUSTOM_CLASS_NAME=""
+export SHARDING_CUSTOM_PARAMETERS=""
 
 mvn clean package -PtemplatesRun \
 -DskipTests \
@@ -201,7 +213,7 @@ mvn clean package -PtemplatesRun \
 -Dregion="$REGION" \
 -DjobName="spanner-change-streams-to-sharded-file-sink-job" \
 -DtemplateName="Spanner_Change_Streams_to_Sharded_File_Sink" \
--Dparameters="changeStreamName=$CHANGE_STREAM_NAME,instanceId=$INSTANCE_ID,databaseId=$DATABASE_ID,spannerProjectId=$SPANNER_PROJECT_ID,metadataInstance=$METADATA_INSTANCE,metadataDatabase=$METADATA_DATABASE,startTimestamp=$START_TIMESTAMP,endTimestamp=$END_TIMESTAMP,sessionFilePath=$SESSION_FILE_PATH,windowDuration=$WINDOW_DURATION,gcsOutputDirectory=$GCS_OUTPUT_DIRECTORY,filtrationMode=$FILTRATION_MODE,sourceShardsFilePath=$SOURCE_SHARDS_FILE_PATH,metadataTableSuffix=$METADATA_TABLE_SUFFIX,skipDirectoryName=$SKIP_DIRECTORY_NAME,runIdentifier=$RUN_IDENTIFIER,runMode=$RUN_MODE" \
+-Dparameters="changeStreamName=$CHANGE_STREAM_NAME,instanceId=$INSTANCE_ID,databaseId=$DATABASE_ID,spannerProjectId=$SPANNER_PROJECT_ID,metadataInstance=$METADATA_INSTANCE,metadataDatabase=$METADATA_DATABASE,startTimestamp=$START_TIMESTAMP,endTimestamp=$END_TIMESTAMP,sessionFilePath=$SESSION_FILE_PATH,windowDuration=$WINDOW_DURATION,gcsOutputDirectory=$GCS_OUTPUT_DIRECTORY,filtrationMode=$FILTRATION_MODE,sourceShardsFilePath=$SOURCE_SHARDS_FILE_PATH,metadataTableSuffix=$METADATA_TABLE_SUFFIX,skipDirectoryName=$SKIP_DIRECTORY_NAME,runIdentifier=$RUN_IDENTIFIER,runMode=$RUN_MODE,shardingCustomJarPath=$SHARDING_CUSTOM_JAR_PATH,shardingCustomClassName=$SHARDING_CUSTOM_CLASS_NAME,shardingCustomParameters=$SHARDING_CUSTOM_PARAMETERS" \
 -f v2/spanner-change-streams-to-sharded-file-sink
 ```
 
@@ -210,8 +222,23 @@ mvn clean package -PtemplatesRun \
 Dataflow supports the utilization of Terraform to manage template jobs,
 see [dataflow_flex_template_job](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/dataflow_flex_template_job).
 
-Here is an example of Terraform configuration:
+Terraform modules have been generated for most templates in this repository. This includes the relevant parameters
+specific to the template. If available, they may be used instead of
+[dataflow_flex_template_job](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/dataflow_flex_template_job)
+directly.
 
+To use the autogenerated module, execute the standard
+[terraform workflow](https://developer.hashicorp.com/terraform/intro/core-workflow):
+
+```shell
+cd v2/spanner-change-streams-to-sharded-file-sink/terraform/Spanner_Change_Streams_to_Sharded_File_Sink
+terraform init
+terraform apply
+```
+
+To use
+[dataflow_flex_template_job](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/dataflow_flex_template_job)
+directly:
 
 ```terraform
 provider "google-beta" {
@@ -248,6 +275,9 @@ resource "google_dataflow_flex_template_job" "spanner_change_streams_to_sharded_
     # metadataTableSuffix = ""
     # skipDirectoryName = "skip"
     # runMode = "regular"
+    # shardingCustomJarPath = ""
+    # shardingCustomClassName = ""
+    # shardingCustomParameters = ""
   }
 }
 ```

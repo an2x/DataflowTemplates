@@ -27,6 +27,7 @@ import com.google.cloud.bigquery.TableId;
 import com.google.cloud.bigquery.TableResult;
 import com.google.cloud.teleport.metadata.TemplateIntegrationTest;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -113,6 +114,16 @@ public final class KafkaToBigQueryIT extends TemplateTestBase {
                 .addParameter("numStorageWriteApiStreams", "3")
                 .addParameter("storageWriteApiTriggeringFrequencySec", "3")
                 .addParameter("outputDeadletterTable", toTableSpecLegacy(deadletterTableId)));
+  }
+
+  @Test
+  public void testKafkaToBigQueryUsingAtLeastOnceMode() throws IOException {
+    ArrayList<String> experiments = new ArrayList<>();
+    experiments.add("streaming_mode_at_least_once");
+    baseKafkaToBigQuery(
+        b ->
+            b.addEnvironment("additionalExperiments", experiments)
+                .addEnvironment("enableStreamingEngine", true));
   }
 
   private Schema getDeadletterSchema() {

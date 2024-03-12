@@ -20,10 +20,8 @@ import com.google.cloud.teleport.metadata.TemplateParameter;
 import com.google.cloud.teleport.v2.transforms.JavascriptTextTransformer.JavascriptTextTransformerOptions;
 import com.google.cloud.teleport.v2.values.FailsafeElement;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
-import org.apache.beam.sdk.coders.RowCoder;
 import org.apache.beam.sdk.extensions.python.PythonExternalTransform;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubMessage;
 import org.apache.beam.sdk.metrics.Counter;
@@ -119,54 +117,77 @@ public abstract class PythonExternalTextTransformer {
               .withArgs(
                   PythonCallableSource.of(
                       String.format(
-                          "import apache_beam as beam\n"
-                              + "import traceback\n"
-                              + "from apache_beam.io.filesystems import FileSystems\n"
-                              + "from typing import Optional\n"
+                          "import traceback\n"
                               + "from typing import Mapping\n"
                               + "from typing import NamedTuple\n"
+                              + "from typing import Optional\n"
+                              + "\n"
+                              + "import apache_beam as beam\n"
+                              + "from apache_beam import coders\n"
+                              + "from apache_beam.io.filesystems import FileSystems\n"
+                              + "from apache_beam.utils import python_callable\n"
+                              + "import logging\n"
+                              + "logging.getLogger().setLevel(logging.INFO)\n"
+                              + "\n"
                               + "\n"
                               + "class ElementRow(NamedTuple):\n"
-                              + "  messageId:  Optional[str]\n"
-                              + "  message:    Optional[str]\n"
+                              + "  messageId: Optional[str]\n"
+                              + "  message: Optional[str]\n"
                               + "  attributes: Mapping[str, str]\n"
                               + "\n"
+                              + "\n"
                               + "class FailsafeRow(NamedTuple):\n"
-                              + "  original:      ElementRow\n"
-                              + "  transformed:   ElementRow\n"
+                              + "  original: ElementRow\n"
+                              + "  transformed: ElementRow\n"
                               + "  error_message: Optional[str]\n"
-                              + "  stack_trace:   Optional[str]\n"
+                              + "  stack_trace: Optional[str]\n"
+                              + "\n"
+                              + "\n"
                               + "coders.registry.register_coder(FailsafeRow, coders.RowCoder)\n"
                               + "\n"
+                              + "\n"
                               + "class UdfTransform(beam.PTransform):\n"
+                              + "  def __init__(self, udf_file, udf_function):\n"
+                              + "    self.udf_file = udf_file\n"
+                              + "    self.udf_function = udf_function\n"
+                              + "\n"
                               + "  def expand(self, pcoll):\n"
                               + "    return pcoll | \"applyUDF\" >> beam.ParDo(self.UdfDoFn())\n"
                               + "\n"
                               + "  @beam.typehints.with_output_types(FailsafeRow)\n"
                               + "  class UdfDoFn(beam.DoFn):\n"
                               + "    def __init__(self):\n"
-                              + "      self.udf_file = FileSystems.open(\"%s\").read().decode()\n"
-                              + "\n"
+                              +
+                              // "      self.udf_file = udf_file\n" +
+                              // "      self.udf_function = udf_function\n" +
+                              "      self.udf_file = FileSystems.open(\"%s\").read().decode()\n"
+                              +
+                              // "      logging.info(\"The UDF File path is: \" +
+                              // f'{self.udf_file}')\n" +
+                              "\n"
                               + "    def process(self, elem):\n"
                               + "      try:\n"
-                              + "        transformed_message = python_callable.PythonCallableWithSource.load_from_script(\n"
+                              +
+                              // "        logging.info(\"Processing element with function\" +
+                              // f'{self.udf_file)\n" +
+                              "        transformed_message = python_callable.PythonCallableWithSource.load_from_script(\n"
                               + "          self.udf_file, \"%s\")(elem.message)\n"
-                              + "        transformed_row = beam.Row(messageId=str(elem.messageId),\n"
-                              + "                                   message=str(transformed_message),\n"
-                              + "                                   attributes=elem.attributes\n"
+                              + "        transformed_row = ElementRow(messageId=elem.messageId,\n"
+                              + "                                     message=transformed_message,\n"
+                              + "                                     attributes=elem.attributes)\n"
                               + "        error_message = \"\"\n"
                               + "        stack_trace = \"\"\n"
                               + "\n"
                               + "      except Exception as e:\n"
                               + "        transformed_row = elem\n"
-                              + "        error_message = e\n"
+                              + "        error_message = str(e)\n"
                               + "        stack_trace = traceback.format_exc()\n"
-                              + "      yield beam.Row(original=elem, transformed=transformed_row,\n"
-                              + "                     error_message=error_message, stack_trace=stack_trace)",
-                          fileSystemPath(), functionName())))
-              // .withExtraPackages(
-              //     List.of("cloudpickle"))
-              .withOutputCoder(RowCoder.of(FailsafeRowPythonExternalUdf.FAILSAFE_SCHEMA)));
+                              + "      yield FailsafeRow(original=elem, transformed=transformed_row,\n"
+                              + "                        error_message=error_message, stack_trace=stack_trace)",
+                          fileSystemPath(), functionName())),
+                  fileSystemPath(),
+                  functionName()));
+      // .withOutputCoder(RowCoder.of(FailsafeRowPythonExternalUdf.FAILSAFE_SCHEMA)));
     }
   }
 
@@ -203,7 +224,7 @@ public abstract class PythonExternalTextTransformer {
             .via(
                 (message) -> {
                   assert message != null;
-                  return firestoreMessageToRow((String) message);
+                  return stringMessageToRow((String) message);
                 });
       } else {
         throw new IllegalStateException();
@@ -225,15 +246,9 @@ public abstract class PythonExternalTextTransformer {
       rowValuesMap.put("message", payload);
       rowValuesMap.put("attributes", attributeMap);
       return Row.withSchema(ROW_SCHEMA).withFieldValues(rowValuesMap).build();
-
-      //      return Row.withSchema(FAILSAFE_SCHEMA)
-      //          .withFieldValues(
-      //              Map.of(
-      //                  "original", original_row))
-      //          .build();
     }
 
-    public static Row firestoreMessageToRow(String message) {
+    public static Row stringMessageToRow(String message) {
       Map<String, Object> rowValuesMap = new HashMap<>();
       rowValuesMap.put("message", message);
       return Row.withSchema(ROW_SCHEMA).withFieldValues(rowValuesMap).build();

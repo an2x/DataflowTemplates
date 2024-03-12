@@ -51,9 +51,7 @@ import com.google.cloud.teleport.v2.templates.datastream.ChangeEventTypeConverto
 import com.google.cloud.teleport.v2.templates.datastream.InvalidChangeEventException;
 import com.google.cloud.teleport.v2.values.FailsafeElement;
 import com.google.common.base.Preconditions;
-import java.io.PrintWriter;
 import java.io.Serializable;
-import java.io.StringWriter;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -215,7 +213,9 @@ class SpannerTransactionWriterDoFn extends DoFn<FailsafeElement<String, String>,
       // Start transaction
       spannerAccessor
           .getDatabaseClient()
-          .readWriteTransaction(Options.tag(getTxnTag(c.getPipelineOptions())))
+          .readWriteTransaction(
+              Options.tag(getTxnTag(c.getPipelineOptions())),
+              Options.priority(spannerConfig.getRpcPriority().get()))
           .run(
               (TransactionCallable<Void>)
                   transaction -> {
@@ -452,9 +452,7 @@ class SpannerTransactionWriterDoFn extends DoFn<FailsafeElement<String, String>,
       TupleTag<FailsafeElement<String, String>> errorTag) {
     // Making a copy, as the input must not be mutated.
     FailsafeElement<String, String> output = FailsafeElement.of(changeEvent);
-    StringWriter errors = new StringWriter();
-    e.printStackTrace(new PrintWriter(errors));
-    output.setErrorMessage(errors.toString());
+    output.setErrorMessage(e.getMessage());
     c.output(errorTag, output);
   }
 

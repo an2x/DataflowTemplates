@@ -81,7 +81,8 @@ public class TemplateDefinitions {
   public boolean isClassic() {
 
     // Python implies Flex
-    if (templateAnnotation.type() == TemplateType.PYTHON) {
+    if (templateAnnotation.type() == TemplateType.PYTHON
+        || templateAnnotation.type() == TemplateType.YAML) {
       return false;
     }
 
@@ -98,7 +99,14 @@ public class TemplateDefinitions {
     ImageSpec imageSpec = new ImageSpec();
 
     SdkInfo sdkInfo = new SdkInfo();
-    sdkInfo.setLanguage(templateAnnotation.type().toString());
+
+    //Xlang templates require the java language.
+    if (templateAnnotation.type() == TemplateType.XLANG) {
+      sdkInfo.setLanguage("JAVA");
+    }
+    else {
+      sdkInfo.setLanguage(templateAnnotation.type().toString());
+    }
     imageSpec.setSdkInfo(sdkInfo);
 
     ImageSpecMetadata metadata = new ImageSpecMetadata();
@@ -130,7 +138,9 @@ public class TemplateDefinitions {
                         block.name(), Arrays.asList(block.content())))
             .collect(Collectors.toList()));
 
-    if (templateAnnotation.placeholderClass() != null
+    if (templateAnnotation.type().equals(TemplateType.YAML)) {
+      metadata.setMainClass("");
+    } else if (templateAnnotation.placeholderClass() != null
         && templateAnnotation.placeholderClass() != void.class) {
       metadata.setMainClass(templateAnnotation.placeholderClass().getName());
     } else {
@@ -290,14 +300,10 @@ public class TemplateDefinitions {
     boolean isFlex = StringUtils.isNotEmpty(templateAnnotation.flexContainerName());
     metadata.setFlexTemplate(isFlex);
 
-    imageSpec.setDefaultEnvironment(
-        Map.of(
-            "additionalUserLabels",
-            Map.of(
-                "goog-dataflow-provided-template-name",
-                templateAnnotation.name().toLowerCase(),
-                "goog-dataflow-provided-template-type",
-                isFlex ? "flex" : "classic")));
+    imageSpec.setAdditionalUserLabel(
+        "goog-dataflow-provided-template-name", templateAnnotation.name().toLowerCase());
+    imageSpec.setAdditionalUserLabel(
+        "goog-dataflow-provided-template-type", isFlex ? "flex" : "classic");
     imageSpec.setImage("gcr.io/{project-id}/" + templateAnnotation.flexContainerName());
     imageSpec.setMetadata(metadata);
 
@@ -312,6 +318,9 @@ public class TemplateDefinitions {
   }
 
   private String getClassModule() {
+    if (templateClass == null) {
+      return null;
+    }
     URL resource = templateClass.getResource(templateClass.getSimpleName() + ".class");
     if (resource == null) {
       return null;

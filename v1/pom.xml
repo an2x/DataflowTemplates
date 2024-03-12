@@ -249,6 +249,14 @@
       <version>3.1.8</version>
     </dependency>
 
+    <!-- Remove once https://github.com/apache/beam/pull/30200 is merged in Beam 2.55 -->
+    <dependency>
+      <groupId>com.google.cloud.teleport</groupId>
+      <artifactId>it-splunk</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+
     <!-- Test -->
     <dependency>
       <groupId>com.google.cloud.teleport</groupId>
@@ -592,9 +600,6 @@
                   com.google.api.grpc:proto-google-cloud-pubsub-v1
                 </ignoredUsedUndeclaredDependency>
                 <ignoredUsedUndeclaredDependency>
-                  org.apache.beam:beam-vendor-grpc-1_48_1
-                </ignoredUsedUndeclaredDependency>
-                <ignoredUsedUndeclaredDependency>
                   com.google.guava:guava
                 </ignoredUsedUndeclaredDependency>
                 <ignoredUsedUndeclaredDependency>
@@ -681,21 +686,12 @@
                 <ignoredUsedUndeclaredDependency>
                   org.apache.beam:beam-model-pipeline
                 </ignoredUsedUndeclaredDependency>
-                <ignoredUsedUndeclaredDependency>
-                  org.apache.beam:beam-vendor-guava-26_0-jre
-                </ignoredUsedUndeclaredDependency>
-                <ignoredUsedUndeclaredDependency>
-                  org.apache.beam:beam-vendor-grpc-1_36_0
-                </ignoredUsedUndeclaredDependency>
                 <ignoredUsedUndeclaredDependency>io.grpc:grpc-api</ignoredUsedUndeclaredDependency>
                 <ignoredUsedUndeclaredDependency>
                   org.apache.derby:derbytools
                 </ignoredUsedUndeclaredDependency>
                 <ignoredUsedUndeclaredDependency>
                   org.hamcrest:hamcrest
-                </ignoredUsedUndeclaredDependency>
-                <ignoredUsedUndeclaredDependency>
-                  org.apache.beam:beam-vendor-grpc-1_43_2
                 </ignoredUsedUndeclaredDependency>
                 <ignoredUsedUndeclaredDependency>
                   com.google.api.grpc:proto-google-cloud-secretmanager-v1
@@ -1124,6 +1120,28 @@
                 <phase>verify</phase>
                 <goals>
                   <goal>release-finish</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>templatesTerraform</id>
+      <activation>
+        <activeByDefault>false</activeByDefault>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>com.google.cloud.teleport</groupId>
+            <artifactId>templates-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <phase>prepare-package</phase>
+                <goals>
+                  <goal>terraform</goal>
                 </goals>
               </execution>
             </executions>

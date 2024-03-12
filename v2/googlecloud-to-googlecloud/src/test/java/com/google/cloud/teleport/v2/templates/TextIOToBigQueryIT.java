@@ -56,6 +56,7 @@ public final class TextIOToBigQueryIT extends TemplateTestBase {
   private static final String SCHEMA_PATH = "TextIOToBigQueryTest/schema.json";
   private static final String INPUT_PATH = "TextIOToBigQueryTest/input.txt";
   private static final String UDF_PATH = "TextIOToBigQueryTest/udf.js";
+  private static final String PYUDF_PATH = "TextIOToBigQueryTest/pyudf.py";
   private BigQueryResourceManager bigQueryClient;
 
   @Before
@@ -69,11 +70,18 @@ public final class TextIOToBigQueryIT extends TemplateTestBase {
   }
 
   @Test
+  @TemplateIntegrationTest(value = TextToBigQueryStreaming.class, template = "Stream_GCS_Text_to_BigQuery_Flex")
   public void testTextIOToBigQuery() throws IOException {
     testTextIOToBigQuery(Function.identity());
   }
 
   @Test
+  @TemplateIntegrationTest(value = TextToBigQueryStreaming.class, template = "Stream_GCS_Text_to_BigQuery_Xlang")
+  public void testTextIOToBigQueryWithPython() throws IOException {
+    testTextIOToBigQueryWithPython(Function.identity());
+  }
+  @Test
+  @TemplateIntegrationTest(value = TextToBigQueryStreaming.class, template = "Stream_GCS_Text_to_BigQuery_Flex")
   public void testTextIOToBigQueryWithStorageApi() throws IOException {
     testTextIOToBigQuery(b -> b.addParameter("useStorageWriteApi", "true"));
   }
@@ -109,6 +117,57 @@ public final class TextIOToBigQueryIT extends TemplateTestBase {
                     .addParameter("inputFilePattern", getGcsPath("input.txt"))
                     .addParameter("javascriptTextTransformGcsPath", getGcsPath("udf.js"))
                     .addParameter("javascriptTextTransformFunctionName", "identity")
+                    .addParameter("outputTable", toTableSpecLegacy(table))
+                    .addParameter("bigQueryLoadingTemporaryDirectory", getGcsPath("bq-tmp"))));
+    assertThatPipeline(info).isRunning();
+
+    Result result = pipelineOperator().waitUntilDone(createConfig(info));
+
+    // Assert
+    assertThatResult(result).isLaunchFinished();
+    TableResult tableRows = bigQueryClient.readTable(testName);
+    assertThatBigQueryRecords(tableRows)
+        .hasRecordUnordered(
+            ImmutableMap.of(
+                "book_id",
+                1,
+                "title",
+                "ABC",
+                "details",
+                ImmutableMap.of("year", "2023", "summary", "LOREM IPSUM LOREM IPSUM")));
+  }
+
+  private void testTextIOToBigQueryWithPython(
+      Function<LaunchConfig.Builder, LaunchConfig.Builder> paramsAdder) throws IOException {
+    // Arrange
+    gcsClient.uploadArtifact("schema.json", Resources.getResource(SCHEMA_PATH).getPath());
+    gcsClient.uploadArtifact("input.txt", Resources.getResource(INPUT_PATH).getPath());
+    gcsClient.uploadArtifact("pyudf.py", Resources.getResource(PYUDF_PATH).getPath());
+
+    bigQueryClient.createDataset(REGION);
+    TableId table =
+        bigQueryClient.createTable(
+            testName,
+            Schema.of(
+                Field.of("book_id", StandardSQLTypeName.INT64),
+                Field.of("title", StandardSQLTypeName.STRING),
+                Field.newBuilder(
+                        "details",
+                        StandardSQLTypeName.STRUCT,
+                        Field.of("year", StandardSQLTypeName.INT64),
+                        Field.of("summary", StandardSQLTypeName.STRING))
+                    .setMode(Mode.NULLABLE)
+                    .build()));
+
+    // Act
+    LaunchInfo info =
+        launchTemplate(
+            paramsAdder.apply(
+                LaunchConfig.builder(testName, specPath)
+                    .addParameter("JSONPath", getGcsPath("schema.json"))
+                    .addParameter("inputFilePattern", getGcsPath("input.txt"))
+                    .addParameter("pythonExternalTextTransformGcsPath", getGcsPath("pyudf.py"))
+                    .addParameter("pythonExternalTextTransformFunctionName", "identity")
                     .addParameter("outputTable", toTableSpecLegacy(table))
                     .addParameter("bigQueryLoadingTemporaryDirectory", getGcsPath("bq-tmp"))));
     assertThatPipeline(info).isRunning();
