@@ -304,8 +304,7 @@ public class PubSubToBigQueryIT extends TemplateTestBase {
   }
 
   private void pubsubToBigQueryWithPythonUdf(
-      Function<LaunchConfig.Builder, LaunchConfig.Builder> paramsAdder)
-      throws IOException {
+      Function<LaunchConfig.Builder, LaunchConfig.Builder> paramsAdder) throws IOException {
     // Arrange
     List<Field> bqSchemaFields =
         Arrays.asList(

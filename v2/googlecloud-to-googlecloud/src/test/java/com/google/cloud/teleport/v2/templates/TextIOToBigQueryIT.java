@@ -70,18 +70,25 @@ public final class TextIOToBigQueryIT extends TemplateTestBase {
   }
 
   @Test
-  @TemplateIntegrationTest(value = TextToBigQueryStreaming.class, template = "Stream_GCS_Text_to_BigQuery_Flex")
+  @TemplateIntegrationTest(
+      value = TextToBigQueryStreaming.class,
+      template = "Stream_GCS_Text_to_BigQuery_Flex")
   public void testTextIOToBigQuery() throws IOException {
     testTextIOToBigQuery(Function.identity());
   }
 
   @Test
-  @TemplateIntegrationTest(value = TextToBigQueryStreaming.class, template = "Stream_GCS_Text_to_BigQuery_Xlang")
+  @TemplateIntegrationTest(
+      value = TextToBigQueryStreaming.class,
+      template = "Stream_GCS_Text_to_BigQuery_Xlang")
   public void testTextIOToBigQueryWithPython() throws IOException {
     testTextIOToBigQueryWithPython(Function.identity());
   }
+
   @Test
-  @TemplateIntegrationTest(value = TextToBigQueryStreaming.class, template = "Stream_GCS_Text_to_BigQuery_Flex")
+  @TemplateIntegrationTest(
+      value = TextToBigQueryStreaming.class,
+      template = "Stream_GCS_Text_to_BigQuery_Flex")
   public void testTextIOToBigQueryWithStorageApi() throws IOException {
     testTextIOToBigQuery(b -> b.addParameter("useStorageWriteApi", "true"));
   }

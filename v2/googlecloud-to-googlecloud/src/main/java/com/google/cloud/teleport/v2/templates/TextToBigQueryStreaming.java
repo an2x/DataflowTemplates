@@ -166,9 +166,10 @@ import org.slf4j.LoggerFactory;
       optionsClass = TextToBigQueryStreamingOptions.class,
       flexContainerName = "text-to-bigquery-streaming",
       skipOptions = {
-          "javascriptTextTransformGcsPath",
-          "javascriptTextTransformFunctionName",
-          "javascriptTextTransformReloadIntervalMinutes"},
+        "javascriptTextTransformGcsPath",
+        "javascriptTextTransformFunctionName",
+        "javascriptTextTransformReloadIntervalMinutes"
+      },
       documentation =
           "https://cloud.google.com/dataflow/docs/guides/templates/provided/text-to-bigquery-stream",
       contactInformation = "https://cloud.google.com/support",

@@ -25,7 +25,6 @@ import com.google.cloud.teleport.metadata.TemplateParameter;
 import com.google.cloud.teleport.v2.options.BigQueryCommonOptions;
 import com.google.cloud.teleport.v2.options.BigQueryStorageApiBatchOptions;
 import com.google.cloud.teleport.v2.transforms.BigQueryConverters;
-import com.google.cloud.teleport.v2.transforms.JavascriptTextTransformer.JavascriptTextTransformerOptions;
 import com.google.cloud.teleport.v2.transforms.JavascriptTextTransformer.TransformTextViaJavascript;
 import com.google.cloud.teleport.v2.transforms.PythonExternalTextTransformer;
 import com.google.cloud.teleport.v2.utils.FirestoreConverters.FirestoreReadOptions;
@@ -166,10 +165,8 @@ public class FirestoreToBigQuery {
 
     Pipeline pipeline = Pipeline.create(options);
 
-    boolean useJavascriptUdf =
-        !Strings.isNullOrEmpty(options.getJavascriptTextTransformGcsPath());
-    boolean usePythonUdf =
-        !Strings.isNullOrEmpty(options.getPythonExternalTextTransformGcsPath());
+    boolean useJavascriptUdf = !Strings.isNullOrEmpty(options.getJavascriptTextTransformGcsPath());
+    boolean usePythonUdf = !Strings.isNullOrEmpty(options.getPythonExternalTextTransformGcsPath());
     if (useJavascriptUdf == usePythonUdf) {
       throw new IllegalArgumentException(
           "Either javascript or Python gcs path must be provided, but not both.");
@@ -188,24 +185,22 @@ public class FirestoreToBigQuery {
                   "string"))
           .setRowSchema(PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA)
           .setCoder(
-              RowCoder.of(
-                  PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA))
+              RowCoder.of(PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA))
           .apply(
               "InvokeUDF",
-              PythonExternalTextTransformer.FailsafePythonExternalUdf
-                  .<PubsubMessage>newBuilder()
+              PythonExternalTextTransformer.FailsafePythonExternalUdf.<PubsubMessage>newBuilder()
                   .setFileSystemPath(options.getPythonExternalTextTransformGcsPath())
                   .setFunctionName(options.getPythonExternalTextTransformFunctionName())
                   .build())
-          .setRowSchema(
-              PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.FAILSAFE_SCHEMA)
+          .setRowSchema(PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.FAILSAFE_SCHEMA)
           .apply(
               MapElements.via(
                   new SimpleFunction<Row, TableRow>() {
                     @Override
                     public TableRow apply(Row row) {
                       Row transformedRow = row.getValue("transformed");
-                      return BigQueryConverters.convertJsonToTableRow(transformedRow.getValue("message"));
+                      return BigQueryConverters.convertJsonToTableRow(
+                          transformedRow.getValue("message"));
                     }
                   }))
           .apply("WriteBigQuery", writeToBigQuery(options));

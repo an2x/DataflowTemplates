@@ -25,7 +25,6 @@ import static org.twdata.maven.mojoexecutor.MojoExecutor.executionEnvironment;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.goal;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.plugin;
 
-import com.google.cloud.teleport.metadata.Template;
 import com.google.cloud.teleport.metadata.Template.TemplateType;
 import com.google.cloud.teleport.plugin.PythonDockerfileGenerator;
 import com.google.cloud.teleport.plugin.TemplateDefinitionsParser;
