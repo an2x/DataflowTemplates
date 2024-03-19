@@ -181,8 +181,7 @@ public class FirestoreToBigQuery {
                   .build())
           .apply(
               "MapToRecord",
-              PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.getMappingFunction(
-                  "string"))
+              PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.stringMappingFunction())
           .setRowSchema(PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA)
           .setCoder(
               RowCoder.of(PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA))

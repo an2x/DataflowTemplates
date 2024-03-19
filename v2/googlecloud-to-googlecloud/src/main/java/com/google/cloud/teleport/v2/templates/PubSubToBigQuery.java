@@ -423,8 +423,8 @@ public class PubSubToBigQuery {
                 // across multiple transforms.
                 .apply(
                     "MapToRecord",
-                    PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.getMappingFunction(
-                        "pubsub"))
+                    PythonExternalTextTransformer.FailsafeRowPythonExternalUdf
+                        .pubSubMappingFunction())
                 .setRowSchema(PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA)
                 .setCoder(
                     RowCoder.of(
@@ -435,8 +435,6 @@ public class PubSubToBigQuery {
                         .<PubsubMessage>newBuilder()
                         .setFileSystemPath(options.getPythonExternalTextTransformGcsPath())
                         .setFunctionName(options.getPythonExternalTextTransformFunctionName())
-                        .setSuccessTag(UDF_OUT)
-                        .setFailureTag(UDF_DEADLETTER_OUT)
                         .build())
                 .setRowSchema(
                     PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.FAILSAFE_SCHEMA)

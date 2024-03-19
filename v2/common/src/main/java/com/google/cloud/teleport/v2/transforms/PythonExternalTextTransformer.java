@@ -18,7 +18,6 @@ package com.google.cloud.teleport.v2.transforms;
 import com.google.auto.value.AutoValue;
 import com.google.cloud.teleport.metadata.TemplateParameter;
 import com.google.cloud.teleport.v2.transforms.JavascriptTextTransformer.JavascriptTextTransformerOptions;
-import com.google.cloud.teleport.v2.values.FailsafeElement;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -32,7 +31,6 @@ import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.util.PythonCallableSource;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.Row;
-import org.apache.beam.sdk.values.TupleTag;
 import org.apache.beam.sdk.values.TypeDescriptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,7 +66,7 @@ public abstract class PythonExternalTextTransformer {
   }
 
   @AutoValue
-  public abstract static class FailsafePythonExternalUdf<T>
+  public abstract static class FailsafePythonExternalUdf
       extends PTransform<PCollection<Row>, PCollection<Row>> {
     public abstract @Nullable String fileSystemPath();
 
@@ -78,12 +76,8 @@ public abstract class PythonExternalTextTransformer {
 
     public abstract @Nullable Integer reloadIntervalMinutes();
 
-    public abstract TupleTag<FailsafeElement<T, String>> successTag();
-
-    public abstract TupleTag<FailsafeElement<T, String>> failureTag();
-
-    public static <T> Builder<T> newBuilder() {
-      return new AutoValue_PythonExternalTextTransformer_FailsafePythonExternalUdf.Builder<>();
+    public static Builder newBuilder() {
+      return new AutoValue_PythonExternalTextTransformer_FailsafePythonExternalUdf.Builder();
     }
 
     private final Counter successCounter =
@@ -94,20 +88,16 @@ public abstract class PythonExternalTextTransformer {
 
     /** Builder for {@link FailsafePythonExternalUdf}. */
     @AutoValue.Builder
-    public abstract static class Builder<T> {
-      public abstract Builder<T> setFileSystemPath(@Nullable String fileSystemPath);
+    public abstract static class Builder {
+      public abstract Builder setFileSystemPath(@Nullable String fileSystemPath);
 
-      public abstract Builder<T> setFunctionName(@Nullable String functionName);
+      public abstract Builder setFunctionName(@Nullable String functionName);
 
-      public abstract Builder<T> setReloadIntervalMinutes(Integer value);
+      public abstract Builder setReloadIntervalMinutes(Integer value);
 
-      public abstract Builder<T> setLoggingEnabled(@Nullable Boolean loggingEnabled);
+      public abstract Builder setLoggingEnabled(@Nullable Boolean loggingEnabled);
 
-      public abstract Builder<T> setSuccessTag(TupleTag<FailsafeElement<T, String>> successTag);
-
-      public abstract Builder<T> setFailureTag(TupleTag<FailsafeElement<T, String>> failureTag);
-
-      public abstract FailsafePythonExternalUdf<T> build();
+      public abstract FailsafePythonExternalUdf build();
     }
 
     @Override
@@ -133,7 +123,7 @@ public abstract class PythonExternalTextTransformer {
                               + "class ElementRow(NamedTuple):\n"
                               + "  messageId: Optional[str]\n"
                               + "  message: Optional[str]\n"
-                              + "  attributes: Mapping[str, str]\n"
+                              + "  attributes: Optional[Mapping[str, str]]\n"
                               + "\n"
                               + "\n"
                               + "class FailsafeRow(NamedTuple):\n"
@@ -191,13 +181,12 @@ public abstract class PythonExternalTextTransformer {
     }
   }
 
-  public abstract static class FailsafeRowPythonExternalUdf<T>
-      extends PTransform<PCollection<PubsubMessage>, PCollection<Row>> {
+  public abstract static class FailsafeRowPythonExternalUdf {
     public static final Schema ROW_SCHEMA =
         Schema.builder()
             .addNullableStringField("messageId")
             .addNullableStringField("message")
-            .addMapField("attributes", Schema.FieldType.STRING, Schema.FieldType.STRING)
+            .addNullableMapField("attributes", Schema.FieldType.STRING, Schema.FieldType.STRING)
             .build();
 
     public static final Schema FAILSAFE_SCHEMA =
@@ -208,27 +197,22 @@ public abstract class PythonExternalTextTransformer {
             .addNullableStringField("stack_trace")
             .build();
 
-    public static String pubsub = "pubsub";
-    public static String string = "string";
+    public static <T> MapElements<T, Row> pubSubMappingFunction() {
+      return MapElements.into(TypeDescriptor.of(Row.class))
+          .via(
+              (message) -> {
+                assert message != null;
+                return pubSubMessageToRow((PubsubMessage) message);
+              });
+    }
 
-    public static <T> MapElements<T, Row> getMappingFunction(String sourceType) {
-      if (sourceType == pubsub) {
-        return MapElements.into(TypeDescriptor.of(Row.class))
-            .via(
-                (message) -> {
-                  assert message != null;
-                  return pubSubMessageToRow((PubsubMessage) message);
-                });
-      } else if (sourceType == string) {
-        return MapElements.into(TypeDescriptor.of(Row.class))
-            .via(
-                (message) -> {
-                  assert message != null;
-                  return stringMessageToRow((String) message);
-                });
-      } else {
-        throw new IllegalStateException();
-      }
+    public static <T> MapElements<T, Row> stringMappingFunction() {
+      return MapElements.into(TypeDescriptor.of(Row.class))
+          .via(
+              (message) -> {
+                assert message != null;
+                return stringMessageToRow((String) message);
+              });
     }
 
     public static Row pubSubMessageToRow(PubsubMessage message) {

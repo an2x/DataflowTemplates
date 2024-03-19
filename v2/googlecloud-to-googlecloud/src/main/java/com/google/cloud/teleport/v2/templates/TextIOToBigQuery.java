@@ -29,6 +29,7 @@ import com.google.cloud.teleport.v2.transforms.JavascriptTextTransformer.Transfo
 import com.google.cloud.teleport.v2.transforms.PythonExternalTextTransformer;
 import com.google.cloud.teleport.v2.transforms.PythonExternalTextTransformer.PythonExternalTextTransformerOptions;
 import com.google.cloud.teleport.v2.utils.BigQueryIOUtils;
+import com.google.cloud.teleport.v2.values.FailsafeElement;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import java.nio.channels.Channels;
@@ -54,7 +55,9 @@ import org.apache.beam.sdk.options.ValueProvider.StaticValueProvider;
 import org.apache.beam.sdk.transforms.MapElements;
 import org.apache.beam.sdk.transforms.SimpleFunction;
 import org.apache.beam.sdk.util.StreamUtils;
+import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.Row;
+import org.apache.beam.sdk.values.TupleTag;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -143,6 +146,7 @@ import org.json.JSONObject;
               + "Cloud Storage, transform them using a JavaScript User Defined Function (UDF) that you provide, and append the result to a BigQuery table.",
       optionsClass = TextIOToBigQuery.Options.class,
       skipOptions = {"javascriptTextTransformReloadIntervalMinutes"},
+      optionalOptions = {"javascriptTextTransformGcsPath", "javascriptTextTransformFunctionName"},
       documentation =
           "https://cloud.google.com/dataflow/docs/guides/templates/provided/cloud-storage-to-bigquery",
       flexContainerName = "text-to-bigquery",
@@ -284,6 +288,9 @@ public class TextIOToBigQuery {
   private static final String RECORD_TYPE = "RECORD";
   private static final String FIELDS_ENTRY = "fields";
 
+  public static final TupleTag<FailsafeElement<PubsubMessage, String>> UDF_OUT =
+      new TupleTag<>() {};
+
   public static void main(String[] args) {
     UncaughtExceptionLogger.register();
 
@@ -311,55 +318,72 @@ public class TextIOToBigQuery {
           "Either javascript or Python gcs path must be provided, but not both.");
     }
 
-    if (usePythonUdf) {
-      pipeline
-          .apply("Read from source", TextIO.read().from(options.getInputFilePattern()))
-          .apply(
-              "MapToRecord",
-              PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.getMappingFunction(
-                  "string"))
-          .setRowSchema(PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA)
-          .setCoder(
-              RowCoder.of(PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA))
-          .apply(
-              "InvokeUDF",
-              PythonExternalTextTransformer.FailsafePythonExternalUdf.<PubsubMessage>newBuilder()
-                  .setFileSystemPath(options.getPythonExternalTextTransformGcsPath())
-                  .setFunctionName(options.getPythonExternalTextTransformFunctionName())
-                  .build())
-          .setRowSchema(PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.FAILSAFE_SCHEMA)
-          .apply(
-              MapElements.via(
-                  new SimpleFunction<Row, TableRow>() {
-                    @Override
-                    public TableRow apply(Row row) {
-                      Row transformedRow = row.getValue("transformed");
-                      return BigQueryConverters.convertJsonToTableRow(
-                          transformedRow.getValue("message"));
-                    }
-                  }))
-          .apply("Insert into Bigquery", writeToBQ.get());
+    PCollection<String> source =
+        pipeline.apply("Read from source", TextIO.read().from(options.getInputFilePattern()));
+    PCollection<TableRow> udfOut;
 
+    if (usePythonUdf) {
+      udfOut =
+          source
+              .apply(
+                  "MapToRecord",
+                  PythonExternalTextTransformer.FailsafeRowPythonExternalUdf
+                      .stringMappingFunction())
+              .setCoder(
+                  RowCoder.of(
+                      PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.ROW_SCHEMA))
+              .apply(
+                  "InvokeUDF",
+                  PythonExternalTextTransformer.FailsafePythonExternalUdf.newBuilder()
+                      .setFileSystemPath(options.getPythonExternalTextTransformGcsPath())
+                      .setFunctionName(options.getPythonExternalTextTransformFunctionName())
+                      .build())
+              .setCoder(
+                  RowCoder.of(
+                      PythonExternalTextTransformer.FailsafeRowPythonExternalUdf.FAILSAFE_SCHEMA))
+              .apply(
+                  MapElements.via(
+                      new SimpleFunction<Row, TableRow>() {
+                        @Override
+                        public TableRow apply(Row row) {
+                          String errorMessage = row.getValue("error_message");
+                          String stackTrace = row.getValue("stack_trace");
+                          if (!Strings.isNullOrEmpty(errorMessage)
+                              || !Strings.isNullOrEmpty(stackTrace)) {
+                            Object originalElement = row.getValue("original");
+                            throw new RuntimeException(
+                                String.format(
+                                    "Error applying UDF to the source record [%s], error message: [%s], stack trace: [%s]",
+                                    originalElement, errorMessage, stackTrace));
+                          }
+
+                          Row transformedRow = row.getValue("transformed");
+                          return BigQueryConverters.convertJsonToTableRow(
+                              transformedRow.getValue("message"));
+                        }
+                      }));
     } else {
-      pipeline
-          .apply("Read from source", TextIO.read().from(options.getInputFilePattern()))
-          .apply(
-              TransformTextViaJavascript.newBuilder()
-                  .setFileSystemPath(options.getJavascriptTextTransformGcsPath())
-                  .setFunctionName(options.getJavascriptTextTransformFunctionName())
-                  .setReloadIntervalMinutes(
-                      options.getJavascriptTextTransformReloadIntervalMinutes())
-                  .build())
-          .apply(
-              MapElements.via(
-                  new SimpleFunction<String, TableRow>() {
-                    @Override
-                    public TableRow apply(String json) {
-                      return BigQueryConverters.convertJsonToTableRow(json);
-                    }
-                  }))
-          .apply("Insert into Bigquery", writeToBQ.get());
+      udfOut =
+          source
+              .apply(
+                  TransformTextViaJavascript.newBuilder()
+                      .setFileSystemPath(options.getJavascriptTextTransformGcsPath())
+                      .setFunctionName(options.getJavascriptTextTransformFunctionName())
+                      .setReloadIntervalMinutes(
+                          options.getJavascriptTextTransformReloadIntervalMinutes())
+                      .build())
+              .apply(
+                  MapElements.via(
+                      new SimpleFunction<String, TableRow>() {
+                        @Override
+                        public TableRow apply(String json) {
+                          return BigQueryConverters.convertJsonToTableRow(json);
+                        }
+                      }));
     }
+
+    udfOut.apply("Insert into Bigquery", writeToBQ.get());
+
     return pipeline.run();
   }
 
