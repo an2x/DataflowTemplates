@@ -22,11 +22,13 @@ import com.google.cloud.teleport.metadata.TemplateCategory;
 import com.google.cloud.teleport.v2.common.UncaughtExceptionLogger;
 import com.google.cloud.teleport.v2.kafka.utils.FileAwareConsumerFactoryFn;
 import com.google.cloud.teleport.v2.kafka.utils.FileAwareProducerFactoryFn;
+import com.google.cloud.teleport.v2.kafka.utils.KafkaConfig;
 import com.google.cloud.teleport.v2.kafka.utils.KafkaTopicUtils;
 import com.google.cloud.teleport.v2.kafka.values.KafkaAuthenticationMethod;
 import com.google.cloud.teleport.v2.options.KafkaToKafkaOptions;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.io.kafka.KafkaIO;
@@ -147,7 +149,15 @@ public class KafkaToKafka {
       throw new IllegalArgumentException(
           "Please provide a valid bootstrap server which matches `[,:a-zA-Z0-9._-]+` and a topic which matches `[,a-zA-Z0-9._-]+`");
     }
-    if (options.getEnableCommitOffsets()) {}
+
+    Map<String, Object> consumerConfig = KafkaConfig.fromReadOptionsWithSslAuth(
+        options,
+        options.getSourceKeystoreLocation(),
+        options.getSourceTruststoreLocation(),
+        options.getSourceTruststorePasswordSecretId(),
+        options.getSourceKeystorePasswordSecretId(),
+        options.getSourceKeyPasswordSecretId());
+    Map<String, Object> producerConfig = KafkaConfig.fromWriteOptions(options);
 
     Pipeline pipeline = Pipeline.create(options);
     pipeline
@@ -158,7 +168,7 @@ public class KafkaToKafka {
                 .withTopic(sourceTopic)
                 .withKeyDeserializer(ByteArrayDeserializer.class)
                 .withValueDeserializer(ByteArrayDeserializer.class)
-                .withConsumerConfigUpdates(ConsumerProperties.from(options))
+                .withConsumerConfigUpdates(consumerConfig)
                 .withConsumerFactoryFn(new FileAwareConsumerFactoryFn())
                 .withoutMetadata())
         .apply(
@@ -168,7 +178,7 @@ public class KafkaToKafka {
                 .withTopic(destinationTopic)
                 .withKeySerializer(ByteArraySerializer.class)
                 .withValueSerializer(ByteArraySerializer.class)
-                .withProducerConfigUpdates(ProducerProperties.from(options))
+                .withProducerConfigUpdates(producerConfig)
                 .withProducerFactoryFn(new FileAwareProducerFactoryFn()));
 
     return pipeline.run();
